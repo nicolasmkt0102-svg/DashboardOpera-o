@@ -176,6 +176,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="topbar-right">
       <span class="user-badge" id="user-nome">👤</span>
       <button class="btn-danger" onclick="sair()">Sair</button>
+      <button class="btn" onclick="openModal('exportar')" style="border-color:#388bfd;color:#79c0ff">📥 Exportar mês</button>
       <button class="btn btn-primary" onclick="openModal('lancamento')">+ Lançar dia</button>
     </div>
   </div>
@@ -375,6 +376,47 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- MODAL EXPORTAR -->
+<div class="overlay" id="overlay-exportar">
+  <div class="modal">
+    <div class="modal-title">📥 Exportar relatório mensal</div>
+    <div class="field">
+      <label>Mês de referência</label>
+      <select id="exp-mes" style="padding:8px 10px;border:0.5px solid #30363d;border-radius:8px;font-size:13px;background:#0d1117;color:#e6edf3">
+        <option value="01">Janeiro</option>
+        <option value="02">Fevereiro</option>
+        <option value="03">Março</option>
+        <option value="04">Abril</option>
+        <option value="05">Maio</option>
+        <option value="06">Junho</option>
+        <option value="07">Julho</option>
+        <option value="08">Agosto</option>
+        <option value="09">Setembro</option>
+        <option value="10">Outubro</option>
+        <option value="11">Novembro</option>
+        <option value="12">Dezembro</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Ano</label>
+      <input type="number" id="exp-ano" value="2026" min="2024" max="2030" style="padding:8px 10px;border:0.5px solid #30363d;border-radius:8px;font-size:13px;background:#0d1117;color:#e6edf3">
+    </div>
+    <div style="background:#1c2128;border-radius:8px;padding:12px;margin-bottom:4px;border:0.5px solid #30363d">
+      <div style="font-size:12px;color:#8b949e;margin-bottom:6px">O arquivo CSV vai conter:</div>
+      <div style="font-size:12px;color:#e6edf3;display:flex;flex-direction:column;gap:4px">
+        <span>✅ Métricas de ads por dia (gasto, leads, vendas, faturamento, ROI, CPL, CPA, conversão)</span>
+        <span>✅ Movimentações do caixa</span>
+        <span>✅ Despesas fixas</span>
+        <span>✅ Resumo financeiro do mês</span>
+      </div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal('exportar')">Cancelar</button>
+      <button class="btn-ok" onclick="exportarCSV()" style="background:#1f6feb">📥 Baixar CSV</button>
+    </div>
+  </div>
+</div>
 
 <script>
 const SUPABASE_URL='https://hagvsqvydfauuimfyopk.supabase.co';
@@ -767,6 +809,97 @@ async function saveCaixa(){
   movCaixa=c||[];renderCaixa();
 }
 async function deleteCaixa(id){if(!confirm('Excluir?'))return;await sb.from('caixa').delete().eq('id',id);const {data}=await sb.from('caixa').select('*').order('created_at',{ascending:false});movCaixa=data||[];renderCaixa();toast('Excluído.');}
+
+// ============ EXPORTAR CSV ============
+function exportarCSV(){
+  const mes = document.getElementById('exp-mes').value;
+  const ano = document.getElementById('exp-ano').value;
+  const nomeMes = document.getElementById('exp-mes').options[document.getElementById('exp-mes').selectedIndex].text;
+
+  // Filtrar dias do mês selecionado
+  const diasMes = dias.filter(d => {
+    const partes = d.data.split('/');
+    return partes[1] === mes;
+  });
+
+  // Filtrar caixa do mês
+  const caixaMes = movCaixa.filter(m => {
+    const partes = m.data.split('/');
+    return partes[1] === mes;
+  });
+
+  let csv = '\uFEFF'; // BOM para Excel reconhecer UTF-8
+
+  // ── SEÇÃO 1: MÉTRICAS DE ADS ──
+  csv += `RELATÓRIO MENSAL — ${nomeMes.toUpperCase()}/${ano}\n\n`;
+  csv += `=== MÉTRICAS DE ADS ===\n`;
+  csv += `Data,Gasto Ads (R$),Leads,CPL (R$),Vendas,CPA (R$),Faturamento (R$),ROI (%),Conversão (%)\n`;
+
+  let totalGasto=0, totalLeads=0, totalVendas=0, totalFat=0;
+  diasMes.forEach(d => {
+    const c = calc(d);
+    totalGasto += Number(d.gasto);
+    totalLeads += Number(d.leads);
+    totalVendas += Number(d.vendas);
+    totalFat += Number(d.fat);
+    csv += `${d.data},${Number(d.gasto).toFixed(2)},${d.leads},${c.cpl.toFixed(2)},${d.vendas},${c.cpa.toFixed(2)},${Number(d.fat).toFixed(2)},${c.roi.toFixed(1)},${c.conv.toFixed(1)}\n`;
+  });
+
+  const roiTotal = totalGasto>0?((totalFat-totalGasto)/totalGasto)*100:0;
+  const convTotal = totalLeads>0?(totalVendas/totalLeads)*100:0;
+  const cplTotal = totalLeads>0?totalGasto/totalLeads:0;
+  const cpaTotal = totalVendas>0?totalGasto/totalVendas:0;
+  csv += `TOTAL,${totalGasto.toFixed(2)},${totalLeads},${cplTotal.toFixed(2)},${totalVendas},${cpaTotal.toFixed(2)},${totalFat.toFixed(2)},${roiTotal.toFixed(1)},${convTotal.toFixed(1)}\n\n`;
+
+  // ── SEÇÃO 2: CAIXA ──
+  csv += `=== MOVIMENTAÇÕES DO CAIXA ===\n`;
+  csv += `Data,Tipo,Descrição,Categoria,Valor (R$)\n`;
+  let totalIn=0, totalOut=0;
+  caixaMes.forEach(m => {
+    if(m.tipo==='in') totalIn+=Number(m.val);
+    else totalOut+=Number(m.val);
+    csv += `${m.data},${m.tipo==='in'?'Entrada':'Saída'},${m.descricao},${m.cat},${Number(m.val).toFixed(2)}\n`;
+  });
+  csv += `,,TOTAL ENTRADAS,,${totalIn.toFixed(2)}\n`;
+  csv += `,,TOTAL SAÍDAS,,${totalOut.toFixed(2)}\n`;
+  csv += `,,SALDO DO CAIXA,,${(totalIn-totalOut).toFixed(2)}\n\n`;
+
+  // ── SEÇÃO 3: DESPESAS FIXAS ──
+  csv += `=== DESPESAS FIXAS ===\n`;
+  csv += `Descrição,Valor Mensal (R$)\n`;
+  let totalDesp=0;
+  despesas.forEach(d => {
+    totalDesp+=Number(d.val);
+    csv += `${d.descricao},${Number(d.val).toFixed(2)}\n`;
+  });
+  csv += `TOTAL,${totalDesp.toFixed(2)}\n\n`;
+
+  // ── SEÇÃO 4: RESUMO FINANCEIRO ──
+  const margemBruta = totalFat>0?((totalFat-totalGasto)/totalFat)*100:0;
+  const lucroLiq = totalFat-totalGasto-totalDesp;
+  const margemLiq = totalFat>0?(lucroLiq/totalFat)*100:0;
+  csv += `=== RESUMO FINANCEIRO ===\n`;
+  csv += `Item,Valor (R$)\n`;
+  csv += `Faturamento bruto,${totalFat.toFixed(2)}\n`;
+  csv += `(-) Gasto com ads,${totalGasto.toFixed(2)}\n`;
+  csv += `= Margem bruta,${(totalFat-totalGasto).toFixed(2)}\n`;
+  csv += `Margem bruta (%),${margemBruta.toFixed(1)}%\n`;
+  csv += `(-) Despesas fixas,${totalDesp.toFixed(2)}\n`;
+  csv += `= Lucro líquido,${lucroLiq.toFixed(2)}\n`;
+  csv += `Margem líquida (%),${margemLiq.toFixed(1)}%\n`;
+  csv += `ROI geral (%),${roiTotal.toFixed(1)}%\n`;
+
+  // Download
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `relatorio_${nomeMes}_${ano}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  closeModal('exportar');
+  toast(`✅ Relatório de ${nomeMes}/${ano} baixado!`);
+}
 </script>
 </body>
 </html>
