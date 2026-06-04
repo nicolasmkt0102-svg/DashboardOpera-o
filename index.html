@@ -188,6 +188,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <button class="ntab" onclick="goTab('simulador',this)">🧮 Simulador</button>
       <button class="ntab" onclick="goTab('financeiro',this)">💰 Financeiro</button>
       <button class="ntab" onclick="goTab('caixa',this)">🏦 Caixa</button>
+      <button class="ntab" onclick="goTab('pendentes',this)">⏳ Pendentes</button>
     </div>
 
     <div id="pane-hoje" class="pane on">
@@ -319,6 +320,27 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         </div>
       </div>
     </div>
+
+    <!-- PENDENTES -->
+    <div id="pane-pendentes" class="pane">
+      <div class="metrics" id="pend-metrics"></div>
+      <div class="card">
+        <div class="card-head"><span class="card-title">⏳ Vendas pendentes de pagamento</span></div>
+        <div style="overflow-x:auto">
+          <table class="tbl" style="min-width:500px">
+            <thead><tr>
+              <th style="width:10%">Data</th>
+              <th style="width:32%">Observação / Cliente</th>
+              <th style="width:12%">Vendas</th>
+              <th style="width:16%">Faturamento</th>
+              <th style="width:14%">Status</th>
+              <th style="width:16%;text-align:right">Ações</th>
+            </tr></thead>
+            <tbody id="pend-table"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -334,6 +356,23 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <div class="field"><label>Leads</label><input type="number" id="lf-leads" placeholder="0" min="0"></div>
       <div class="field"><label>Vendas</label><input type="number" id="lf-vendas" placeholder="0" min="0"></div>
       <div class="field"><label>Faturamento (R$)</label><input type="number" id="lf-fat" placeholder="0,00" min="0" step="0.01"></div>
+    </div>
+    <div class="field">
+      <label>Status das vendas</label>
+      <div style="display:flex;gap:8px;margin-top:2px">
+        <label style="flex:1;display:flex;align-items:center;gap:8px;padding:10px 12px;border:0.5px solid #30363d;border-radius:8px;cursor:pointer;background:#0d1117;transition:all .15s" id="status-aprovada-label">
+          <input type="radio" name="lf-status" id="lf-status-aprovada" value="aprovada" checked onchange="updateStatusLabel()" style="accent-color:#3fb950;width:14px;height:14px">
+          <span style="font-size:13px;color:#e6edf3">✅ Venda aprovada</span>
+        </label>
+        <label style="flex:1;display:flex;align-items:center;gap:8px;padding:10px 12px;border:0.5px solid #30363d;border-radius:8px;cursor:pointer;background:#0d1117;transition:all .15s" id="status-pendente-label">
+          <input type="radio" name="lf-status" id="lf-status-pendente" value="pendente" onchange="updateStatusLabel()" style="accent-color:#e3b341;width:14px;height:14px">
+          <span style="font-size:13px;color:#e6edf3">⏳ Venda pendente</span>
+        </label>
+      </div>
+    </div>
+    <div class="field" id="field-obs-pendente" style="display:none">
+      <label>Observação (cliente, data prevista...)</label>
+      <input type="text" id="lf-obs" placeholder="Ex: João Silva — paga na sexta">
     </div>
     <div class="modal-btns">
       <button class="btn-cancel" onclick="closeModal('lancamento')">Cancelar</button>
@@ -713,6 +752,45 @@ function goTab(name,el){
   if(name==='simulador'){calcSim();calcMeta();}
   if(name==='financeiro')renderFinanceiro();
   if(name==='caixa')renderCaixa();
+  if(name==='pendentes')renderPendentes();
+}
+
+function updateStatusLabel(){
+  const isPend = document.getElementById('lf-status-pendente').checked;
+  document.getElementById('field-obs-pendente').style.display = isPend?'flex':'none';
+  document.getElementById('status-aprovada-label').style.borderColor = !isPend?'#3fb950':'#30363d';
+  document.getElementById('status-pendente-label').style.borderColor = isPend?'#e3b341':'#30363d';
+}
+
+function renderPendentes(){
+  const pendentes = dias.filter(d=>d.status==='pendente');
+  const totalPendFat = pendentes.reduce((s,d)=>s+Number(d.fat),0);
+  const totalPendVend = pendentes.reduce((s,d)=>s+Number(d.vendas),0);
+  document.getElementById('pend-metrics').innerHTML=[
+    {cls:'mc',lbl:'Total pendentes',val:pendentes.length,sub:'lançamentos'},
+    {cls:'mc-gasto',lbl:'Vendas pendentes',val:totalPendVend,sub:'a receber'},
+    {cls:'mc-fat',lbl:'Valor a receber',val:fR(totalPendFat),sub:'faturamento pendente'},
+  ].map(m=>`<div class="${m.cls}"><div class="mc-lbl">${m.lbl}</div><div class="mc-val">${m.val}</div><div class="mc-sub">${m.sub}</div></div>`).join('');
+  document.getElementById('pend-table').innerHTML=pendentes.length
+    ?pendentes.map(d=>`<tr>
+        <td>${d.data}</td>
+        <td style="color:#8b949e">${d.obs||'—'}</td>
+        <td>${d.vendas}</td>
+        <td style="color:#e3b341;font-weight:600">${fR(d.fat)}</td>
+        <td><span class="badge b-warn">⏳ Pendente</span></td>
+        <td><div class="actions">
+          <button class="btn-icon" onclick="aprovarVenda('${d.id}')" title="Aprovar venda" style="color:#3fb950;font-size:15px">✅</button>
+          <button class="btn-icon btn-edit" onclick="editDia('${d.id}')" title="Editar">✏️</button>
+          <button class="btn-icon btn-del" onclick="deleteDia('${d.id}')" title="Excluir">🗑️</button>
+        </div></td>
+      </tr>`).join('')
+    :'<tr><td colspan="6" class="empty">Nenhuma venda pendente! 🎉</td></tr>';
+}
+
+async function aprovarVenda(id){
+  if(!confirm('Marcar essa venda como aprovada?')) return;
+  await sb.from('dias').update({status:'aprovada'}).eq('id',id);
+  await loadAll(); toast('✅ Venda aprovada!');
 }
 
 function openModal(t){
@@ -739,6 +817,10 @@ function editDia(id){
   document.getElementById('lf-leads').value=d.leads;
   document.getElementById('lf-vendas').value=d.vendas;
   document.getElementById('lf-fat').value=d.fat;
+  document.getElementById('lf-obs').value=d.obs||'';
+  const statusVal = d.status||'aprovada';
+  document.getElementById('lf-status-'+statusVal).checked=true;
+  updateStatusLabel();
   document.getElementById('overlay-lancamento').classList.add('show');
 }
 async function saveDia(){
@@ -747,12 +829,16 @@ async function saveDia(){
   const leads=parseInt(document.getElementById('lf-leads').value)||0;
   const vendas=parseInt(document.getElementById('lf-vendas').value)||0;
   const fat=parseFloat(document.getElementById('lf-fat').value)||0;
+  const status=document.querySelector('input[name="lf-status"]:checked')?.value||'aprovada';
+  const obs=document.getElementById('lf-obs').value.trim();
   if(!dataRaw||gasto===0){toast('Preencha data e gasto!');return;}
   const d=new Date(dataRaw+'T12:00:00');
   const data=(d.getDate()).toString().padStart(2,'0')+'/'+(d.getMonth()+1).toString().padStart(2,'0');
-  if(editingId.lancamento){await sb.from('dias').update({data,gasto,leads,vendas,fat}).eq('id',editingId.lancamento);toast('✅ Atualizado!');}
-  else{await sb.from('dias').insert({data,gasto,leads,vendas,fat});toast('✅ Dia lançado!');}
-  ['lf-gasto','lf-leads','lf-vendas','lf-fat'].forEach(id=>document.getElementById(id).value='');
+  if(editingId.lancamento){await sb.from('dias').update({data,gasto,leads,vendas,fat,status,obs}).eq('id',editingId.lancamento);toast('✅ Atualizado!');}
+  else{await sb.from('dias').insert({data,gasto,leads,vendas,fat,status,obs});toast(status==='aprovada'?'✅ Dia lançado!':'⏳ Lançado como pendente!');}
+  ['lf-gasto','lf-leads','lf-vendas','lf-fat','lf-obs'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('lf-status-aprovada').checked=true;
+  updateStatusLabel();
   closeModal('lancamento');await loadAll();
 }
 async function deleteDia(id){if(!confirm('Excluir?'))return;await sb.from('dias').delete().eq('id',id);await loadAll();toast('Excluído.');}
