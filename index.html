@@ -665,13 +665,15 @@ function renderHoje(){
   }
 
   // Cards estilo UTMify
+  const lucroBruto = tF - tG;
   const cards = [
     { lbl:'Faturamento Líquido', val:fR(tF), color:'#56d364', bg:'#0f2419', border:'#3fb950', big:true },
     { lbl:'Gastos com Anúncios', val:fR(tG), color:'#ff7b72', bg:'#2d1117', border:'#f85149', big:true },
-    { lbl:'Lucro', val:fR(lucro), color: lucro>=0?'#56d364':'#ff7b72', bg: lucro>=0?'#0f2419':'#2d1117', border: lucro>=0?'#3fb950':'#f85149', big:true },
+    { lbl:'Lucro Bruto', val:fR(lucroBruto), color: lucroBruto>=0?'#56d364':'#ff7b72', bg: lucroBruto>=0?'#0f2419':'#2d1117', border: lucroBruto>=0?'#3fb950':'#f85149', big:true },
+    { lbl:'Lucro Líquido', val:fR(lucro), color: lucro>=0?'#56d364':'#ff7b72', bg: lucro>=0?'#0f2419':'#2d1117', border: lucro>=0?'#3fb950':'#f85149', big:true },
     { lbl:'ROAS', val:roas.toFixed(2), color:'#79c0ff', bg:'#0c1f3a', border:'#388bfd', big:true },
     { lbl:'ROI', val:Math.round(roi)+'%', color: roi>=0?'#56d364':'#ff7b72', bg:'#161b22', border:'#30363d' },
-    { lbl:'Margem', val:margem.toFixed(1)+'%', color:'#e6edf3', bg:'#161b22', border:'#30363d' },
+    { lbl:'Margem', val:margem.toFixed(1)+'%', color: margem>=0?'#56d364':'#ff7b72', bg:'#161b22', border:'#30363d' },
     { lbl:'Vendas', val:tV, color:'#e6edf3', bg:'#161b22', border:'#30363d' },
     { lbl:'Vendas Pendentes', val:fR(pendentes), color:'#e3b341', bg:'#2b1d0e', border:'#e3b341' },
     { lbl:'Leads', val:tL, color:'#e6edf3', bg:'#161b22', border:'#30363d' },
